@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -43,6 +43,23 @@ content: 'Привет! Я RotyChat AI с доступом в интернет �
   const [input, setInput] = useState('');
   const [activeSection, setActiveSection] = useState('chat');
   const [isSearching, setIsSearching] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('darkMode');
+      return saved ? JSON.parse(saved) : false;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
+  }, [isDarkMode]);
 
 const detectQueryType = (query: string): 'math' | 'search' => {
     const mathPatterns = [
@@ -270,6 +287,18 @@ const detectQueryType = (query: string): 'math' | 'search' => {
               <Icon name="Calculator" size={14} />
               <span className="ml-1">AI + Интернет</span>
             </Badge>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="relative"
+            >
+              {isDarkMode ? (
+                <Icon name="Sun" size={20} className="text-yellow-500" />
+              ) : (
+                <Icon name="Moon" size={20} />
+              )}
+            </Button>
             <Button variant="ghost" size="icon">
               <Icon name="Bell" size={20} />
             </Button>
@@ -455,7 +484,7 @@ const detectQueryType = (query: string): 'math' | 'search' => {
                   </Card>
                 </TabsContent>
 
-                <TabsContent value="appearance" className="space-y-4 mt-6">
+<TabsContent value="appearance" className="space-y-4 mt-6">
                   <Card className="p-6">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
@@ -465,7 +494,7 @@ const detectQueryType = (query: string): 'math' | 'search' => {
                             Использовать тёмное оформление
                           </p>
                         </div>
-                        <Switch />
+                        <Switch checked={isDarkMode} onCheckedChange={setIsDarkMode} />
                       </div>
                     </div>
                   </Card>
