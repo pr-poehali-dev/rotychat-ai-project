@@ -1,0 +1,31 @@
+{
+  "tests": [
+    {
+      "name": "Test search functionality",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "query": "artificial intelligence"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "query": "string",
+        "results": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Test empty query",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "query": ""
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

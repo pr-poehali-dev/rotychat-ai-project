@@ -22,6 +22,13 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  searchResults?: SearchResult[];
+}
+
+interface SearchResult {
+  title: string;
+  snippet: string;
+  url: string;
 }
 
 const Index = () => {
@@ -29,14 +36,15 @@ const Index = () => {
     {
       id: '1',
       role: 'assistant',
-      content: 'Привет! Я RotyChat AI. Чем могу помочь сегодня?',
+      content: 'Привет! Я RotyChat AI с доступом в интернет! Задайте любой вопрос, и я найду актуальную информацию.',
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState('');
   const [activeSection, setActiveSection] = useState('chat');
+  const [isSearching, setIsSearching] = useState(false);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMessage: Message = {
@@ -46,15 +54,63 @@ const Index = () => {
       timestamp: new Date(),
     };
 
-    const aiResponse: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: 'Это демо-ответ AI. Подключите внешний API для полноценной работы!',
-      timestamp: new Date(),
-    };
-
-    setMessages([...messages, userMessage, aiResponse]);
+    setMessages([...messages, userMessage]);
+    const currentInput = input;
     setInput('');
+    setIsSearching(true);
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/2d002e5d-640c-49a2-a187-b49d462956d4', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: currentInput }),
+      });
+
+      const data = await response.json();
+
+      let aiContent = '';
+      const searchResults: SearchResult[] = [];
+
+      if (data.results && data.results.length > 0) {
+        const mainResult = data.results[0];
+        
+        if (mainResult.snippet && mainResult.snippet !== 'К сожалению, по запросу') {
+          aiContent = `По вашему запросу "${currentInput}" я нашёл следующую информацию:\n\n${mainResult.snippet}`;
+          
+          data.results.forEach((result: SearchResult) => {
+            if (result.url) {
+              searchResults.push(result);
+            }
+          });
+        } else {
+          aiContent = `К сожалению, по запросу "${currentInput}" я не нашёл конкретной информации. Попробуйте переформулировать вопрос.`;
+        }
+      } else {
+        aiContent = 'Не удалось найти информацию. Попробуйте другой запрос.';
+      }
+
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: aiContent,
+        timestamp: new Date(),
+        searchResults: searchResults.length > 0 ? searchResults : undefined,
+      };
+
+      setMessages((prev) => [...prev, aiResponse]);
+    } catch (error) {
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Произошла ошибка при поиске. Пожалуйста, попробуйте снова.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorResponse]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const sidebarItems = [
@@ -163,10 +219,10 @@ const Index = () => {
             </h2>
           </div>
 
-          <div className="flex items-center gap-2">
+<div className="flex items-center gap-2">
             <Badge variant="secondary" className="hidden sm:flex">
-              <Icon name="Zap" size={14} className="mr-1" />
-              Быстрый режим
+              <Icon name="Globe" size={14} className="mr-1" />
+              Интернет подключён
             </Badge>
             <Button variant="ghost" size="icon">
               <Icon name="Bell" size={20} />
@@ -192,14 +248,44 @@ const Index = () => {
                         </AvatarFallback>
                       </Avatar>
                     )}
-                    <Card
+<Card
                       className={`max-w-[80%] p-4 ${
                         message.role === 'user'
                           ? 'bg-gradient-to-br from-primary to-secondary text-white'
                           : 'bg-card'
                       }`}
                     >
-                      <p className="text-sm leading-relaxed">{message.content}</p>
+                      <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
+                      
+                      {message.searchResults && message.searchResults.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-border/50 space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">
+                            Источники:
+                          </p>
+                          {message.searchResults.map((result, idx) => (
+                            result.url && (
+                              <a
+                                key={idx}
+                                href={result.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-start gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
+                              >
+                                <Icon name="ExternalLink" size={14} className="mt-0.5 text-primary shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium group-hover:text-primary transition-colors line-clamp-1">
+                                    {result.title}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground line-clamp-1">
+                                    {result.url}
+                                  </p>
+                                </div>
+                              </a>
+                            )
+                          ))}
+                        </div>
+                      )}
+                      
                       <p
                         className={`text-xs mt-2 ${
                           message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'
@@ -221,18 +307,27 @@ const Index = () => {
               </div>
             </ScrollArea>
 
-            <div className="border-t border-border p-4 bg-background">
-              <div className="max-w-4xl mx-auto flex gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Напишите сообщение..."
-                  className="flex-1"
-                />
-                <Button onClick={handleSend} className="gradient-bg">
-                  <Icon name="Send" size={18} />
-                </Button>
+<div className="border-t border-border p-4 bg-background">
+              <div className="max-w-4xl mx-auto">
+                {isSearching && (
+                  <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
+                    <Icon name="Globe" size={16} className="animate-spin" />
+                    <span>Ищу информацию в интернете...</span>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !isSearching && handleSend()}
+                    placeholder="Напишите сообщение..."
+                    className="flex-1"
+                    disabled={isSearching}
+                  />
+                  <Button onClick={handleSend} className="gradient-bg" disabled={isSearching}>
+                    <Icon name={isSearching ? 'Loader2' : 'Send'} size={18} className={isSearching ? 'animate-spin' : ''} />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
