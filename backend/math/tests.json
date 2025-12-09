@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "name": "Test basic arithmetic",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "expression": "25 + 17"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "result": 42,
+        "explanation": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Test multiplication",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "expression": "6 * 7"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "result": 42
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Test empty expression",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "expression": ""
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

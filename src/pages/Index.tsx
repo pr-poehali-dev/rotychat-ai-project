@@ -36,13 +36,25 @@ const Index = () => {
     {
       id: '1',
       role: 'assistant',
-      content: 'Привет! Я RotyChat AI с доступом в интернет! Задайте любой вопрос, и я найду актуальную информацию.',
+content: 'Привет! Я RotyChat AI с доступом в интернет и умею решать математику! Задайте вопрос или математический пример.',
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState('');
   const [activeSection, setActiveSection] = useState('chat');
   const [isSearching, setIsSearching] = useState(false);
+
+const detectQueryType = (query: string): 'math' | 'search' => {
+    const mathPatterns = [
+      /\d+\s*[\+\-\*\/×÷]\s*\d+/,
+      /(?:сколько|вычисл|реш|посчита)/i,
+      /\d+\s*процент/i,
+      /корень|факториал|степен/i,
+      /^\s*[\d\s\+\-\*\/\(\)\.]+\s*$/,
+    ];
+    
+    return mathPatterns.some(pattern => pattern.test(query)) ? 'math' : 'search';
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -59,52 +71,85 @@ const Index = () => {
     setInput('');
     setIsSearching(true);
 
+    const queryType = detectQueryType(currentInput);
+
     try {
-      const response = await fetch('https://functions.poehali.dev/2d002e5d-640c-49a2-a187-b49d462956d4', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query: currentInput }),
-      });
+      if (queryType === 'math') {
+        const response = await fetch('https://functions.poehali.dev/e8679176-d21e-4aba-99ff-03f11914ba15', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ expression: currentInput }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      let aiContent = '';
-      const searchResults: SearchResult[] = [];
-
-      if (data.results && data.results.length > 0) {
-        const mainResult = data.results[0];
-        
-        if (mainResult.snippet && mainResult.snippet !== 'К сожалению, по запросу') {
-          aiContent = `По вашему запросу "${currentInput}" я нашёл следующую информацию:\n\n${mainResult.snippet}`;
-          
-          data.results.forEach((result: SearchResult) => {
-            if (result.url) {
-              searchResults.push(result);
-            }
-          });
+        let aiContent = '';
+        if (data.result !== undefined) {
+          aiContent = `${data.explanation}\n\n📊 Ответ: ${data.result}`;
+          if (data.steps && data.steps.length > 0) {
+            aiContent += `\n\nШаги решения:\n${data.steps.join('\n')}`;
+          }
         } else {
-          aiContent = `К сожалению, по запросу "${currentInput}" я не нашёл конкретной информации. Попробуйте переформулировать вопрос.`;
+          aiContent = data.error || 'Не удалось вычислить выражение';
         }
+
+        const aiResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: aiContent,
+          timestamp: new Date(),
+        };
+
+        setMessages((prev) => [...prev, aiResponse]);
       } else {
-        aiContent = 'Не удалось найти информацию. Попробуйте другой запрос.';
+        const response = await fetch('https://functions.poehali.dev/2d002e5d-640c-49a2-a187-b49d462956d4', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: currentInput }),
+        });
+
+        const data = await response.json();
+
+        let aiContent = '';
+        const searchResults: SearchResult[] = [];
+
+        if (data.results && data.results.length > 0) {
+          const mainResult = data.results[0];
+          
+          if (mainResult.snippet && mainResult.snippet !== 'К сожалению, по запросу') {
+            aiContent = `По вашему запросу "${currentInput}" я нашёл следующую информацию:\n\n${mainResult.snippet}`;
+            
+            data.results.forEach((result: SearchResult) => {
+              if (result.url) {
+                searchResults.push(result);
+              }
+            });
+          } else {
+            aiContent = `К сожалению, по запросу "${currentInput}" я не нашёл конкретной информации. Попробуйте переформулировать вопрос.`;
+          }
+        } else {
+          aiContent = 'Не удалось найти информацию. Попробуйте другой запрос.';
+        }
+
+        const aiResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: aiContent,
+          timestamp: new Date(),
+          searchResults: searchResults.length > 0 ? searchResults : undefined,
+        };
+
+        setMessages((prev) => [...prev, aiResponse]);
       }
-
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: aiContent,
-        timestamp: new Date(),
-        searchResults: searchResults.length > 0 ? searchResults : undefined,
-      };
-
-      setMessages((prev) => [...prev, aiResponse]);
     } catch (error) {
       const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Произошла ошибка при поиске. Пожалуйста, попробуйте снова.',
+        content: 'Произошла ошибка при обработке запроса. Пожалуйста, попробуйте снова.',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorResponse]);
@@ -220,9 +265,10 @@ const Index = () => {
           </div>
 
 <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="hidden sm:flex">
-              <Icon name="Globe" size={14} className="mr-1" />
-              Интернет подключён
+            <Badge variant="secondary" className="hidden sm:flex items-center gap-1">
+              <Icon name="Globe" size={14} />
+              <Icon name="Calculator" size={14} />
+              <span className="ml-1">AI + Интернет</span>
             </Badge>
             <Button variant="ghost" size="icon">
               <Icon name="Bell" size={20} />
